@@ -1,0 +1,31 @@
+general {
+    interval = 5
+}
+
+order += "disk /"
+order += "cpu_usage"
+order += "load"
+order += "memory"
+order += "battery 0"
+order += "tztime local"
+
+disk "/" {
+    format = "%avail"
+}
+
+cpu_usage {
+    format = "CPU: %usage"
+}
+
+memory {
+    format = "MEM: %used MB"
+}
+
+battery 0 {
+    format = "BAT: %status %percentage"
+}
+
+tztime local {
+    format = "%Y-%m-%d %H:%M:%S"
+}
+
