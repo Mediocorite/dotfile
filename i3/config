@@ -31,14 +31,16 @@ exec --no-startup-id deskflow
 
 # The combination of xss-lock, nm-applet and pactl is a popular choice, so
 # they are included here as an example. Modify as you see fit.
-
 # xss-lock grabs a logind suspend inhibit lock and will use i3lock to lock the
 # screen before suspend. Use loginctl lock-session to lock your screen.
-exec --no-startup-id xss-lock --transfer-sleep-lock -- i3lock --nofork
+exec --no-startup-id xidlehook \
+--not-when-fullscreen \
+--not-when-command "pactl list sink-inputs | grep -q RUNNING" \
+--timer normal 600 'i3lock -i ~/.config/assets/backgrounds/dark-cat-rosewater.png -t -ef -n' ''
 exec --no-startup-id xinput set-prop "Elan Touchpad" "libinput Natural Scrolling Enabled" 1
 exec --no-startup-id picom --config ~/.config/picom.conf
 exec_always --no-startup-id ~/.config/i3/warp-cursor.sh
-# exec_always --no-startup-id feh --bg-scale ~/.config/assets/backgrounds/dark-cat-rosewater.png
+exec_always --no-startup-id feh --bg-scale ~/.config/assets/backgrounds/dark-cat-rosewater.png
 
 # NetworkManager is the most popular way to manage wireless networks on Linux,
 # and nm-applet is a desktop environment-independent system tray GUI for it.
@@ -60,7 +62,7 @@ floating_modifier $mod
 # move tiling windows via drag & drop by left-clicking into the title bar,
 # or left-clicking anywhere into the window while holding the floating modifier.
 tiling_drag modifier titlebar
-
+for_window [class="^.*"] border pixel 8
 # start a terminal
 bindsym $super+Return exec i3-sensible-terminal
 
@@ -115,7 +117,8 @@ bindsym $mod+e layout toggle split
 
 # toggle tiling / floating
 bindsym $mod+Shift+space floating toggle
-
+bindsym Mod1+Tab exec --no-startup-id rofi -modi combi -combi-modi window -show combi
+# bindsym $mod+Tab exec "rofi -show combi run,window" 
 # change focus between tiling / floating windows
 bindsym $mod+space focus mode_toggle
 
@@ -196,10 +199,10 @@ mode "resize" {
 
 bindsym $mod+x mode "resize"
 # Resize window using Alt + u/i/o/p
-bindsym $mod+u resize shrink width 10 px
+bindsym $mod+p resize shrink width 10 px
 bindsym $mod+i resize shrink height 10 px
 bindsym $mod+o resize grow height 10 px
-bindsym $mod+p resize grow width 10 px
+bindsym $mod+u resize grow width 10 px
 
 # Add colors for active and inactive borders
 client.focused  #075985 #075985 #075985 #075985

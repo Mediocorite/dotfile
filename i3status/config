@@ -9,10 +9,6 @@ order += "memory"
 order += "battery 0"
 order += "tztime local"
 
-disk "/" {
-    format = "%avail"
-}
-
 cpu_usage {
     format = "CPU: %usage"
 }

@@ -24,7 +24,7 @@ create_symlink() {
       fi
     fi
   fi
-
+#
   # Create the symlink
   ln -sfn "$source" "$target"
   echo "Linked $source -> $target"
