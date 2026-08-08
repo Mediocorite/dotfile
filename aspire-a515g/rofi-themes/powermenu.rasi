@@ -1,0 +1,60 @@
+/* Power menu — compact, centred list. */
+@import "catppuccin"
+
+window {
+    width:            300px;
+    transparency:     "real";
+    location:         center;
+    anchor:           center;
+    border:           2px;
+    border-color:     @red;
+    border-radius:    14px;
+    background-color: @base;
+    padding:          0;
+}
+
+mainbox {
+    children: [ inputbar, listview ];
+    padding:  14px;
+    spacing:  10px;
+}
+
+inputbar {
+    background-color: @mantle;
+    border-radius:    10px;
+    padding:          9px 14px;
+    spacing:          10px;
+    children:         [ prompt, entry ];
+}
+
+prompt  { text-color: @red; font: "JetBrainsMono Nerd Font Bold 11"; }
+entry   { placeholder: ""; cursor: text; }
+
+listview {
+    columns:   1;
+    lines:     5;
+    spacing:   4px;
+    scrollbar: false;
+    cycle:     true;
+    dynamic:   true;
+}
+
+element {
+    padding:       10px 14px;
+    border-radius: 9px;
+    cursor:        pointer;
+}
+
+element normal.normal    { text-color: @subtext; }
+element alternate.normal { text-color: @subtext; }
+
+element selected.normal {
+    background-color: @red;
+    text-color:       @crust;
+}
+
+element-text {
+    vertical-align:   0.5;
+    background-color: transparent;
+    text-color:       inherit;
+}

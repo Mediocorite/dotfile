@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Rofi power menu.
+set -u
+
+lock="  Lock"
+logout="  Log out"
+suspend="  Suspend"
+reboot="  Reboot"
+shutdown="  Shut down"
+
+choice=$(printf '%s\n' "$lock" "$suspend" "$logout" "$reboot" "$shutdown" \
+    | rofi -dmenu -i -no-custom -p "power" -theme powermenu)
+
+case "$choice" in
+    "$lock")     i3lock -c 1e1e2e -n & ;;
+    "$logout")   i3-msg exit ;;
+    "$suspend")  systemctl suspend ;;
+    "$reboot")   systemctl reboot ;;
+    "$shutdown") systemctl poweroff ;;
+esac

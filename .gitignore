@@ -1,0 +1,14 @@
+# setup.sh moves displaced files here
+backup/
+
+# python bytecode from the tools/ scripts
+__pycache__/
+*.py[cod]
+
+# timestamped config backups made while editing in place
+*.backup-*
+*.bak
+*~
+
+# fish writes machine-local state into this file
+common/fish/fish_variables.local

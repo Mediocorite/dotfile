@@ -1,0 +1,88 @@
+/* App launcher — centred, two-column grid with icons. */
+@import "catppuccin"
+
+window {
+    width:            720px;
+    transparency:     "real";
+    location:         center;
+    anchor:           center;
+    border:           2px;
+    border-color:     @blue;
+    border-radius:    14px;
+    background-color: @base;
+    padding:          0;
+}
+
+mainbox {
+    children: [ inputbar, message, listview ];
+    padding:  14px;
+    spacing:  12px;
+}
+
+inputbar {
+    background-color: @mantle;
+    border:           1px;
+    border-color:     @surface1;
+    border-radius:    10px;
+    padding:          10px 14px;
+    spacing:          10px;
+    children:         [ prompt, entry ];
+}
+
+prompt {
+    text-color: @blue;
+    font:       "JetBrainsMono Nerd Font Bold 11";
+}
+
+entry {
+    placeholder:            "Search…";
+    placeholder-color:      @dim;
+    cursor:                 text;
+}
+
+message {
+    background-color: @surface0;
+    border-radius:    8px;
+    padding:          8px 12px;
+}
+
+textbox {
+    text-color: @subtext;
+}
+
+listview {
+    columns:      2;
+    lines:        7;
+    fixed-height: false;
+    spacing:      6px;
+    scrollbar:    false;
+    cycle:        true;
+    dynamic:      true;
+}
+
+element {
+    padding:       9px 12px;
+    spacing:       12px;
+    border-radius: 9px;
+    cursor:        pointer;
+}
+
+element normal.normal   { text-color: @subtext; }
+element alternate.normal{ text-color: @subtext; }
+
+element selected.normal {
+    background-color: @blue;
+    text-color:       @crust;
+}
+
+element-icon {
+    size:             26px;
+    vertical-align:   0.5;
+    background-color: transparent;
+}
+
+element-text {
+    vertical-align:   0.5;
+    background-color: transparent;
+    text-color:       inherit;
+}

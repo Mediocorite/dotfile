@@ -1,0 +1,25 @@
+/* Catppuccin Mocha palette — shared by every rofi theme here. */
+* {
+    base:      #1e1e2eff;
+    mantle:    #181825ff;
+    crust:     #11111bff;
+    surface0:  #313244ff;
+    surface1:  #45475aff;
+    surface2:  #585b70ff;
+    overlay0:  #6c7086ff;
+    text:      #cdd6f4ff;
+    subtext:   #a6adc8ff;
+    dim:       #7f849cff;
+    blue:      #89b4faff;
+    lavender:  #b4befeff;
+    sapphire:  #74c7ecff;
+    green:     #a6e3a1ff;
+    yellow:    #f9e2afff;
+    peach:     #fab387ff;
+    red:       #f38ba8ff;
+    mauve:     #cba6f7ff;
+    pink:      #f5c2e7ff;
+
+    background-color: transparent;
+    text-color:       @text;
+}

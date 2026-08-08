@@ -1,0 +1,27 @@
+# Ghostty - Xorg + i3, Intel integrated graphics.
+#
+# Fully opaque on purpose: transparency and blur make the terminal's appearance
+# depend on the compositor and add GPU work on every redraw. i3 handles window
+# borders and tiling, so Ghostty draws no decoration of its own.
+
+theme = Catppuccin Mocha
+
+font-family = JetBrainsMono Nerd Font
+font-size = 13
+
+background-opacity = 1
+window-decoration = none
+window-padding-x = 8
+window-padding-y = 6
+window-padding-balance = true
+
+cursor-style = block
+cursor-style-blink = false
+mouse-hide-while-typing = true
+
+scrollback-limit = 10000
+copy-on-select = clipboard
+confirm-close-surface = false
+
+# i3 provides tiling and window management, so Ghostty's own splits and tabs
+# are left at their defaults and simply go unused.

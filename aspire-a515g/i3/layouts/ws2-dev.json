@@ -1,0 +1,31 @@
+// Workspace 2: Android Studio (2/3) beside the Claude desktop app (1/3).
+//
+// Appended with `append_layout`, this creates two placeholder containers that
+// wait for matching windows and swallow them. Because the placeholders are
+// created up front, the split ratio and the left/right order are fixed before
+// either app starts -- so it does not matter that Android Studio takes far
+// longer to launch than Claude.
+//
+// Classes are exact: Android Studio reports "jetbrains-studio" and the Claude
+// desktop app reports "com.anthropic.Claude" (dots escaped, these are regexes).
+{
+    "border": "pixel",
+    "current_border_width": 3,
+    "floating": "auto_off",
+    "layout": "splith",
+    "percent": 0.67,
+    "type": "con",
+    "swallows": [
+        {"class": "^jetbrains\\-studio$"}
+    ]
+}
+{
+    "border": "pixel",
+    "current_border_width": 3,
+    "floating": "auto_off",
+    "percent": 0.33,
+    "type": "con",
+    "swallows": [
+        {"class": "^com\\.anthropic\\.Claude$"}
+    ]
+}

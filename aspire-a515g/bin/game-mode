@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# Free the GPU from Ollama, then run something on the RTX 2050.
+#
+#   game-mode                 just free the VRAM and report
+#   game-mode <cmd> [args]    free the VRAM, then run <cmd> on the dGPU
+#   game-mode --off           also stop the Ollama server entirely
+#   game-mode --on            start the Ollama server again
+#
+# Why this exists: the display runs on the Intel iGPU and the RTX 2050 is only
+# used on demand, so a game has to be told to use it. Meanwhile Ollama keeps a
+# model resident in VRAM for 30 minutes after the last completion -- on a 4 GB
+# card that is half the budget, so it gets unloaded first.
+set -u
+
+OLLAMA="$HOME/.local/opt/ollama/bin/ollama"
+
+vram() {
+    nvidia-smi --query-gpu=memory.used,memory.total --format=csv,noheader 2>/dev/null \
+        || echo "unavailable"
+}
+
+unload_models() {
+    [ -x "$OLLAMA" ] || return 0
+    systemctl --user is-active --quiet ollama.service || return 0
+
+    # Second field of `ollama ps` output is the model name; skip the header.
+    local models
+    models=$("$OLLAMA" ps 2>/dev/null | awk 'NR>1 {print $1}')
+    if [ -z "$models" ]; then
+        echo "  no model resident in VRAM"
+        return 0
+    fi
+    while read -r m; do
+        [ -n "$m" ] && { echo "  unloading $m"; "$OLLAMA" stop "$m" >/dev/null 2>&1; }
+    done <<< "$models"
+    sleep 2
+}
+
+case "${1-}" in
+    --off)
+        echo "before: $(vram)"
+        unload_models
+        systemctl --user stop ollama.service
+        echo "ollama stopped"
+        sleep 1
+        echo "after : $(vram)"
+        exit 0
+        ;;
+    --on)
+        systemctl --user start ollama.service
+        sleep 2
+        systemctl --user is-active ollama.service
+        exit 0
+        ;;
+esac
+
+echo "before: $(vram)"
+unload_models
+echo "after : $(vram)"
+
+[ $# -eq 0 ] && exit 0
+
+echo "running on RTX 2050: $*"
+# GLX for OpenGL titles, the optimus layer for Vulkan ones. Harmless if the
+# game only uses one of the two.
+exec env __NV_PRIME_RENDER_OFFLOAD=1 \
+         __GLX_VENDOR_LIBRARY_NAME=nvidia \
+         __VK_LAYER_NV_optimus=NVIDIA_only \
+         "$@"

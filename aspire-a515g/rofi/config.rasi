@@ -1,0 +1,17 @@
+configuration {
+    modes:                       "drun,run,window";
+    font:                        "JetBrainsMono Nerd Font 11";
+    show-icons:                  true;
+    icon-theme:                  "Papirus-Dark";
+    drun-display-format:         "{name}";
+    display-drun:                " apps";
+    display-run:                 " run";
+    display-window:              " windows";
+    sidebar-mode:                false;
+    hover-select:                true;
+    me-select-entry:             "";
+    me-accept-entry:             "MousePrimary";
+    kb-cancel:                   "Escape,MouseSecondary";
+}
+
+@theme "launcher"

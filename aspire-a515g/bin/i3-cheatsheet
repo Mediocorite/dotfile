@@ -1,0 +1,252 @@
+#!/usr/bin/env python3
+"""Live i3 keybinding cheatsheet.
+
+Parses the active i3 config (and any files it `include`s) every time it runs,
+so the list always matches the running configuration — edit a binding, reopen
+the sheet, and the change is there. Renders through rofi.
+
+Annotate a binding with a `##` comment on the preceding line to give it a
+description; otherwise the raw i3 command is shown.
+
+    # === Windows ===
+    ## Close the focused window
+    bindsym $mod+q kill
+"""
+import html
+import os
+import re
+import subprocess
+import sys
+
+ACCENT  = "#89b4fa"
+KEYCOL  = "#f9e2af"
+DIMCOL  = "#7f849c"
+MODECOL = "#f5c2e7"
+
+KEY_COL_MAX = 38        # widest the key column is allowed to get
+
+PRETTY = {
+    "mod1": "Alt", "mod2": "Num", "mod3": "Mod3", "mod4": "Super", "mod5": "AltGr",
+    "control": "Ctrl", "ctrl": "Ctrl", "shift": "Shift", "super": "Super",
+    "return": "Enter", "escape": "Esc", "prior": "PgUp", "next": "PgDn",
+    "semicolon": ";", "apostrophe": "'", "grave": "`", "comma": ",",
+    "period": ".", "slash": "/", "backslash": "\\", "minus": "-", "plus": "+",
+    "equal": "=", "bracketleft": "[", "bracketright": "]", "space": "Space",
+    "left": "←", "right": "→", "up": "↑", "down": "↓",
+    "tab": "Tab", "backspace": "Backspace", "delete": "Del", "insert": "Ins",
+    "xf86audioraisevolume": "Vol+", "xf86audiolowervolume": "Vol-",
+    "xf86audiomute": "Mute", "xf86audiomicmute": "MicMute",
+    "xf86audioplay": "Play", "xf86audionext": "Next", "xf86audioprev": "Prev",
+    "xf86monbrightnessup": "Bright+", "xf86monbrightnessdown": "Bright-",
+    "print": "PrtSc",
+}
+
+
+def find_config():
+    for p in (
+        os.path.expanduser("~/.config/i3/config"),
+        os.path.expanduser("~/.i3/config"),
+        "/etc/i3/config",
+    ):
+        if os.path.isfile(p):
+            return p
+    return None
+
+
+def read_with_includes(path, seen=None):
+    """Return the config text, inlining `include` directives i3 4.22+ supports."""
+    seen = seen or set()
+    real = os.path.realpath(path)
+    if real in seen:
+        return ""
+    seen.add(real)
+    try:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            text = fh.read()
+    except OSError:
+        return ""
+    out = []
+    for line in text.splitlines():
+        m = re.match(r"\s*include\s+(.+?)\s*$", line)
+        if m:
+            import glob
+            pat = os.path.expanduser(os.path.expandvars(m.group(1).strip('"\'')))
+            if not os.path.isabs(pat):
+                pat = os.path.join(os.path.dirname(path), pat)
+            for inc in sorted(glob.glob(pat)):
+                out.append(read_with_includes(inc, seen))
+        else:
+            out.append(line)
+    return "\n".join(out)
+
+
+def pretty_key(combo, variables):
+    for name, val in variables.items():
+        combo = combo.replace(name, val)
+    parts = [p for p in combo.split("+") if p]
+    return " + ".join(PRETTY.get(p.lower(), p if len(p) > 1 else p.upper())
+                      for p in parts)
+
+
+def describe(cmd):
+    """Human-ish fallback description derived from the i3 command itself."""
+    c = re.sub(r"\s+", " ", cmd).strip()
+    c = re.sub(r"^exec\s+(--no-startup-id\s+)?", "", c)
+    if len(c) > 64:
+        c = c[:63] + "…"
+    return c
+
+
+def parse(text):
+    """Yield (section, mode, keycombo, description) for every binding.
+
+    A `##` description is sticky: it applies to the whole run of consecutive
+    bindsym lines that follows, so one comment can document `$mod+h/j/k/l`.
+    Anything else — a blank line, a plain comment, a non-binding directive —
+    ends the run.
+    """
+    variables = {}
+    section = "General"
+    mode = None
+    desc = None
+    rows = []
+
+    for raw in text.splitlines():
+        line = raw.strip()
+
+        m = re.match(r"^set\s+(\$\w+)\s+(.+)$", line)
+        if m:
+            variables[m.group(1)] = m.group(2).strip().strip('"')
+            continue
+
+        m = re.match(r"^#\s*={2,}\s*(.+?)\s*={2,}\s*$", line)
+        if m:
+            section, desc = m.group(1), None
+            continue
+
+        m = re.match(r"^##\s*(.+)$", line)
+        if m:
+            desc = m.group(1).strip()
+            continue
+
+        m = re.match(r'^mode\s+(?:--pango_markup\s+)?"?([^"{]+)"?\s*\{', line)
+        if m:
+            mode, desc = m.group(1).strip(), None
+            continue
+
+        if line == "}" and mode:
+            mode, desc = None, None
+            continue
+
+        m = re.match(r"^bind(sym|code)\s+(?:--\S+\s+)*(\S+)\s+(.+)$", line)
+        if m:
+            combo, cmd = m.group(2), m.group(3)
+            key = (f"keycode {combo}" if m.group(1) == "code"
+                   else pretty_key(combo, variables))
+            rows.append((section, mode, key, desc or describe(cmd)))
+            continue
+
+        # any other line ends the sticky-description run
+        desc = None
+
+    return rows
+
+
+def merge_keys(keys):
+    """Render keys that share a description as one label.
+
+    ["Super + H", "Super + J"] -> "Super + H/J"; falls back to a plain join
+    when the combos have no common modifier prefix.
+    """
+    if len(keys) == 1:
+        return keys[0]
+
+    parts = [k.split(" + ") for k in keys]
+    common = 0
+    while all(len(p) > common + 1 for p in parts) and \
+            len({p[common] for p in parts}) == 1:
+        common += 1
+
+    if common and all(len(p) == common + 1 for p in parts):
+        prefix = " + ".join(parts[0][:common])
+        label = f"{prefix} + " + "/".join(p[common] for p in parts)
+    else:
+        label = " · ".join(keys)
+
+    if len(label) > KEY_COL_MAX:
+        label = f"{keys[0]} …+{len(keys) - 1}"
+    return label
+
+
+def collapse(entries):
+    """Fold consecutive entries that share a description into one row."""
+    out = []
+    for mode, key, desc in entries:
+        if out and out[-1][0] == mode and out[-1][2] == desc:
+            out[-1][1].append(key)
+        else:
+            out.append([mode, [key], desc])
+    return [(mode, merge_keys(keys), desc) for mode, keys, desc in out]
+
+
+def main():
+    cfg = find_config()
+    if not cfg:
+        subprocess.run(["i3-nagbar", "-t", "error",
+                        "-m", "i3-cheatsheet: no i3 config found"])
+        return 1
+
+    rows = parse(read_with_includes(cfg))
+    if not rows:
+        subprocess.run(["i3-nagbar", "-t", "warning",
+                        "-m", "i3-cheatsheet: no bindings found"])
+        return 1
+
+    # group by section, preserving config order
+    order, groups = [], {}
+    for section, mode, key, desc in rows:
+        if section not in groups:
+            groups[section] = []
+            order.append(section)
+        groups[section].append((mode, key, desc))
+    for section in order:
+        groups[section] = collapse(groups[section])
+
+    width = max((len(k) for g in groups.values() for _, k, _ in g), default=10)
+    width = min(max(width, 14), KEY_COL_MAX)
+
+    lines = []
+    for section in order:
+        lines.append(
+            f"<span color='{ACCENT}' weight='bold'>── {html.escape(section)} "
+            f"{'─' * max(2, 46 - len(section))}</span>"
+        )
+        for mode, key, desc in groups[section]:
+            k = html.escape(key).ljust(width)
+            d = html.escape(desc)
+            tag = (f"  <span color='{MODECOL}'>[{html.escape(mode)}]</span>"
+                   if mode else "")
+            lines.append(
+                f"<span color='{KEYCOL}' weight='bold'>{k}</span>"
+                f"  <span color='{DIMCOL}'>│</span>  {d}{tag}"
+            )
+
+    total = len(rows)
+    try:
+        subprocess.run(
+            ["rofi", "-dmenu", "-i", "-markup-rows", "-no-custom",
+             "-p", "search", "-theme", "cheatsheet",
+             "-mesg", f"<b>i3 keybindings</b>  ·  {total} bindings  ·  "
+                      f"live from {html.escape(cfg)}"],
+            input="\n".join(lines), text=True,
+        )
+    except FileNotFoundError:
+        # rofi missing -> plain text fallback
+        plain = html.unescape(re.sub(r"<[^>]+>", "", "\n".join(lines)))
+        sys.stdout.write(plain + "\n")
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,63 @@
+#!/usr/bin/env python3
+"""Print the current time in words, for the polybar clock module.
+
+  21:16  ->  Saturday, quarter past nine
+  12:00  ->  Saturday, midday
+  00:02  ->  Sunday, midnight
+
+Rounded to the nearest five minutes, the way a person reads a clock aloud.
+Set SHOW_DAY = False for just the time.
+"""
+import datetime
+import sys
+
+SHOW_DAY = True
+
+HOURS = ("twelve", "one", "two", "three", "four", "five",
+         "six", "seven", "eight", "nine", "ten", "eleven")
+
+# (upper bound of minute bucket, phrase, whether it refers to the next hour)
+BUCKETS = (
+    (2,  "{h} o'clock",          False),
+    (7,  "five past {h}",        False),
+    (12, "ten past {h}",         False),
+    (17, "quarter past {h}",     False),
+    (22, "twenty past {h}",      False),
+    (27, "twenty-five past {h}", False),
+    (32, "half past {h}",        False),
+    (37, "twenty-five to {h}",   True),
+    (42, "twenty to {h}",        True),
+    (47, "quarter to {h}",       True),
+    (52, "ten to {h}",           True),
+    (57, "five to {h}",          True),
+    (60, "{h} o'clock",          True),
+)
+
+
+def in_words(now):
+    for limit, phrase, next_hour in BUCKETS:
+        if now.minute <= limit:
+            break
+
+    hour24 = (now.hour + 1) % 24 if next_hour else now.hour
+
+    # "o'clock" is where midnight and midday actually read naturally
+    if phrase.startswith("{h} o'clock"):
+        if hour24 == 0:
+            return "midnight"
+        if hour24 == 12:
+            return "midday"
+
+    return phrase.format(h=HOURS[hour24 % 12])
+
+
+def main():
+    now = datetime.datetime.now()
+    text = in_words(now)
+    if SHOW_DAY:
+        text = f"{now.strftime('%A')}, {text}"
+    sys.stdout.write(text + "\n")
+
+
+if __name__ == "__main__":
+    main()

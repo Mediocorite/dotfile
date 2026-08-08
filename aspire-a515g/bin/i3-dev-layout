@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# Open the workspace-2 dev layout: Android Studio (2/3) | Claude desktop (1/3).
+#
+# If neither app is running, placeholder containers are appended first so the
+# ratio and left/right order are decided before anything launches. If one is
+# already open it is pulled to workspace 2 instead, and only the missing app
+# is started.
+set -u
+
+WS=2
+LAYOUT="$HOME/.config/i3/layouts/ws2-dev.json"
+STUDIO="$HOME/android-studio/bin/studio.sh"
+
+AS_CLASS='jetbrains-studio'
+CL_CLASS='com.anthropic.Claude'
+AS_RE='^jetbrains\-studio$'
+CL_RE='^com\.anthropic\.Claude$'
+
+# Is a window of this exact class currently mapped anywhere?
+have() {
+    i3-msg -t get_tree 2>/dev/null | python3 -c '
+import json, sys
+want = sys.argv[1]
+def walk(n):
+    if (n.get("window_properties") or {}).get("class") == want:
+        return True
+    return any(walk(c) for k in ("nodes", "floating_nodes") for c in n.get(k, []))
+try:
+    sys.exit(0 if walk(json.load(sys.stdin)) else 1)
+except Exception:
+    sys.exit(1)
+' "$1"
+}
+
+command -v i3-msg >/dev/null || { echo "i3-msg not found" >&2; exit 1; }
+
+i3-msg -q "workspace number $WS"
+
+have "$AS_CLASS" && as_open=1 || as_open=0
+have "$CL_CLASS" && cl_open=1 || cl_open=0
+
+if [ "$as_open" -eq 0 ] && [ "$cl_open" -eq 0 ]; then
+    [ -f "$LAYOUT" ] || { echo "missing layout: $LAYOUT" >&2; exit 1; }
+    i3-msg -q "append_layout $LAYOUT"
+else
+    # Something is already running -- gather it here rather than duplicating.
+    [ "$as_open" -eq 1 ] && i3-msg -q "[class=\"$AS_RE\"] move container to workspace number $WS"
+    [ "$cl_open" -eq 1 ] && i3-msg -q "[class=\"$CL_RE\"] move container to workspace number $WS"
+fi
+
+if [ "$as_open" -eq 0 ]; then
+    if [ -x "$STUDIO" ]; then
+        setsid "$STUDIO" >/dev/null 2>&1 < /dev/null &
+    else
+        i3-nagbar -t error -m "Android Studio not found at $STUDIO" >/dev/null 2>&1 &
+    fi
+fi
+[ "$cl_open" -eq 0 ] && setsid claude-desktop >/dev/null 2>&1 < /dev/null &
+
+# Is Claude currently left of Android Studio? Tree order is left-to-right for
+# a splith container, and is authoritative -- the cached rects in get_tree can
+# lag a frame behind a move.
+claude_is_left() {
+    i3-msg -t get_tree 2>/dev/null | python3 -c '
+import json, sys
+order = []
+def rec(n, ws=None):
+    if n.get("type") == "workspace":
+        ws = n.get("name")
+    cls = (n.get("window_properties") or {}).get("class")
+    if cls in ("jetbrains-studio", "com.anthropic.Claude") and ws == "2":
+        order.append(cls)
+    for k in ("nodes", "floating_nodes"):
+        for c in n.get(k, []):
+            rec(c, ws)
+rec(json.load(sys.stdin))
+if len(order) < 2:
+    sys.exit(1)
+sys.exit(0 if order.index("com.anthropic.Claude") < order.index("jetbrains-studio") else 1)
+'
+}
+
+# Android Studio can take a while on a cold start; poll gently, then fix the
+# order and the ratio. The `assign` rules can place a window directly and skip
+# the layout placeholders, so neither can be assumed to have taken effect.
+for _ in $(seq 60); do
+    if have "$AS_CLASS" && have "$CL_CLASS"; then
+        sleep 2
+        claude_is_left && i3-msg -q "[class=\"$CL_RE\"] move right"
+        sleep 1
+        i3-msg -q "[class=\"$CL_RE\"] resize set width 33 ppt"
+        exit 0
+    fi
+    sleep 2
+done
+
+exit 0

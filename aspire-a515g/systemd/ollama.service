@@ -1,0 +1,30 @@
+[Unit]
+Description=Ollama (user-local LLM server)
+After=default.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/opt/ollama/bin/ollama serve
+Restart=on-failure
+RestartSec=3
+
+# Loopback only - nothing on this box needs to reach it over the network.
+Environment="OLLAMA_HOST=127.0.0.1:11434"
+
+# 4 GB of VRAM is the whole budget, so the defaults need trimming:
+#   NUM_PARALLEL=1      the default allocates a separate KV cache per parallel
+#                       request, which multiplies VRAM use and is the usual
+#                       cause of an unexpected spill to CPU on a small card.
+#   MAX_LOADED_MODELS=1 never hold two models in VRAM at once.
+#   FLASH_ATTENTION     cheaper attention on Ampere (compute 8.6).
+#   KV_CACHE_TYPE=q8_0  quantised KV cache; roughly halves context memory.
+#   KEEP_ALIVE=30m      keep the model resident between keystrokes; reloading
+#                       mid-session is what makes local autocomplete feel bad.
+Environment="OLLAMA_NUM_PARALLEL=1"
+Environment="OLLAMA_MAX_LOADED_MODELS=1"
+Environment="OLLAMA_FLASH_ATTENTION=1"
+Environment="OLLAMA_KV_CACHE_TYPE=q8_0"
+Environment="OLLAMA_KEEP_ALIVE=30m"
+
+[Install]
+WantedBy=default.target

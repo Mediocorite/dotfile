@@ -1,0 +1,308 @@
+" ═══════════════════════════════════════════════════════════════════════════
+"  IdeaVim - VSCodeVim + VSpaceCode equivalent for Android Studio
+"
+"  Two layers, same as the VS Code setup:
+"    * this file        -> everything Vim owns (motions, leader menus)
+"    * keymaps/VSCode-Vim.xml -> everything the IDE owns (Ctrl+E, Ctrl+T, ...)
+"
+"  Which-Key renders the leader menus, standing in for VSpaceCode.
+"  Reload after editing with  :source ~/.ideavimrc
+" ═══════════════════════════════════════════════════════════════════════════
+
+" ── plugins ────────────────────────────────────────────────────────────────
+set which-key                 " VSpaceCode-style popup menus
+set easymotion                " needs the IdeaVim-EasyMotion + AceJump plugins
+set surround                  " cs"' , ds" , ys
+set commentary                " gcc , gc<motion>
+set multiple-cursors
+set ReplaceWithRegister       " gr<motion>
+set argtextobj                " aa / ia
+set textobj-entire            " ae / ie
+set highlightedyank
+set exchange                  " cx
+set matchit
+
+" ── general behaviour ──────────────────────────────────────────────────────
+set scrolloff=6
+set sidescrolloff=6
+set incsearch
+set hlsearch
+set ignorecase
+set smartcase
+set number
+set relativenumber
+set showmode
+set showcmd
+set visualbell
+set clipboard+=unnamedplus
+set clipboard+=ideaput
+set ideajoin                  " use the IDE's smart join for J
+set idearefactormode=keep
+
+" Which-Key needs a long timeout, otherwise a pending menu closes itself.
+set timeoutlen=5000
+
+let mapleader = " "
+
+" ── Which-Key appearance (Catppuccin Mocha, matching the desktop) ──────────
+let g:WhichKey_FontSize             = 14
+let g:WhichKey_CommandColor         = "#89b4fa"
+let g:WhichKey_PrefixColor          = "#cba6f7"
+let g:WhichKey_KeyColor             = "#f9e2af"
+let g:WhichKey_SortOrder            = "by_key_prefix_first"
+let g:WhichKey_ShowTypedSequence    = "true"
+let g:WhichKey_DefaultDelay         = 200
+let g:WhichKey_ShowVimActions       = "true"
+
+" ═══════════════════════════════════════════════════════════════════════════
+"  Ctrl-key ownership
+"
+"  sethandler decides, per mode, whether IdeaVim or the IDE gets a chord.
+"  This is what lets Ctrl+J mean "focus the split below" in normal mode and
+"  "next completion item" while typing -- the same split the VS Code config
+"  achieved with `when` clauses.
+" ═══════════════════════════════════════════════════════════════════════════
+sethandler <C-H> n-v:vim i:ide
+sethandler <C-J> n-v:vim i:ide
+sethandler <C-K> n-v:vim i:ide
+sethandler <C-L> n-v:vim i:ide
+sethandler <C-N> n-v:vim i:ide
+" These belong to the IDE everywhere, exactly as in the VS Code keymap.
+sethandler <C-B> a:ide
+sethandler <C-D> a:ide
+sethandler <C-E> a:ide
+sethandler <C-G> a:ide
+sethandler <C-T> a:ide
+sethandler <C-M> a:ide
+sethandler <C-I> a:ide
+sethandler <C-S> a:ide
+
+" ── split navigation (VS Code: workbench.action.navigateLeft/Right/Up/Down)
+nnoremap <C-h> <C-w>h
+nnoremap <C-j> <C-w>j
+nnoremap <C-k> <C-w>k
+nnoremap <C-l> <C-w>l
+
+" ── editor tabs (VS Code: previousEditor / nextEditor in Normal mode) ──────
+nnoremap H :action PreviousTab<CR>
+nnoremap L :action NextTab<CR>
+
+" ── hover in Normal, move lines in Visual (VS Code: shift+k / shift+j) ─────
+nnoremap K :action ShowHoverInfo<CR>
+" MoveLineDown/Up are the exact counterparts of VS Code's
+" editor.action.moveLinesDownAction/UpAction. Vim's `:m ... | gv=gv` idiom is
+" avoided here because IdeaVim's `=` reindent operator is unreliable.
+vnoremap J :action MoveLineDown<CR>
+vnoremap K :action MoveLineUp<CR>
+
+" ── multi-cursor (VS Code: ctrl+n addSelectionToNextFindMatch) ─────────────
+nnoremap <C-n> :action SelectNextOccurrence<CR>
+xnoremap <C-n> :action SelectNextOccurrence<CR>
+
+" ── small quality-of-life ──────────────────────────────────────────────────
+nnoremap <Esc> :nohlsearch<CR>
+nnoremap Y y$
+" keep the cursor put when joining and when jumping through search hits
+nnoremap n nzzzv
+nnoremap N Nzzzv
+" indent without losing the selection
+vnoremap < <gv
+vnoremap > >gv
+
+" ═══════════════════════════════════════════════════════════════════════════
+"  Leader menus - the VSpaceCode layer
+" ═══════════════════════════════════════════════════════════════════════════
+
+" SPC SPC -> the M-x equivalent
+let g:WhichKeyDesc_root_action = "<leader><leader> Find action"
+nnoremap <leader><leader> :action GotoAction<CR>
+
+" ── f: files ───────────────────────────────────────────────────────────────
+let g:WhichKeyDesc_files          = "<leader>f +files"
+let g:WhichKeyDesc_files_find     = "<leader>ff Find file"
+let g:WhichKeyDesc_files_recent   = "<leader>fr Recent files"
+let g:WhichKeyDesc_files_save     = "<leader>fs Save"
+let g:WhichKeyDesc_files_saveall  = "<leader>fS Save all"
+let g:WhichKeyDesc_files_new      = "<leader>fn New file"
+let g:WhichKeyDesc_files_rename   = "<leader>fR Rename file"
+let g:WhichKeyDesc_files_tree     = "<leader>ft File tree"
+nnoremap <leader>ff :action GotoFile<CR>
+nnoremap <leader>fr :action RecentFiles<CR>
+nnoremap <leader>fs :action SaveDocument<CR>
+nnoremap <leader>fS :action SaveAll<CR>
+nnoremap <leader>fn :action NewElement<CR>
+nnoremap <leader>fR :action RenameFile<CR>
+nnoremap <leader>ft :action ActivateProjectToolWindow<CR>
+
+" ── b: buffers / tabs ──────────────────────────────────────────────────────
+let g:WhichKeyDesc_buffers        = "<leader>b +buffers"
+let g:WhichKeyDesc_buffers_list   = "<leader>bb Switch buffer"
+let g:WhichKeyDesc_buffers_del    = "<leader>bd Close buffer"
+let g:WhichKeyDesc_buffers_other  = "<leader>bo Close others"
+let g:WhichKeyDesc_buffers_next   = "<leader>bn Next buffer"
+let g:WhichKeyDesc_buffers_prev   = "<leader>bp Previous buffer"
+nnoremap <leader>bb :action RecentFiles<CR>
+nnoremap <leader>bd :action CloseContent<CR>
+nnoremap <leader>bo :action CloseAllEditorsButActive<CR>
+nnoremap <leader>bn :action NextTab<CR>
+nnoremap <leader>bp :action PreviousTab<CR>
+
+" ── w: windows / splits ────────────────────────────────────────────────────
+let g:WhichKeyDesc_windows        = "<leader>w +windows"
+let g:WhichKeyDesc_windows_vsplit = "<leader>w/ Split right"
+let g:WhichKeyDesc_windows_split  = "<leader>w- Split down"
+let g:WhichKeyDesc_windows_close  = "<leader>wd Close split"
+let g:WhichKeyDesc_windows_left   = "<leader>wh Focus left"
+let g:WhichKeyDesc_windows_down   = "<leader>wj Focus down"
+let g:WhichKeyDesc_windows_up     = "<leader>wk Focus up"
+let g:WhichKeyDesc_windows_right  = "<leader>wl Focus right"
+let g:WhichKeyDesc_windows_max    = "<leader>wm Maximize"
+nnoremap <leader>w/ :action SplitVertically<CR>
+nnoremap <leader>w- :action SplitHorizontally<CR>
+nnoremap <leader>wd :action Unsplit<CR>
+nnoremap <leader>wh <C-w>h
+nnoremap <leader>wj <C-w>j
+nnoremap <leader>wk <C-w>k
+nnoremap <leader>wl <C-w>l
+nnoremap <leader>wm :action MaximizeToolWindow<CR>
+
+" ── g: git (the Magit stand-in; see the notes at the end) ──────────────────
+let g:WhichKeyDesc_git            = "<leader>g +git"
+let g:WhichKeyDesc_git_status     = "<leader>gs Status / local changes"
+let g:WhichKeyDesc_git_commit     = "<leader>gc Commit"
+let g:WhichKeyDesc_git_push       = "<leader>gp Push"
+let g:WhichKeyDesc_git_update     = "<leader>gu Update / pull"
+let g:WhichKeyDesc_git_branches   = "<leader>gb Branches"
+let g:WhichKeyDesc_git_log        = "<leader>gl Log"
+let g:WhichKeyDesc_git_annotate   = "<leader>ga Annotate / blame"
+let g:WhichKeyDesc_git_stash      = "<leader>gz Stash"
+let g:WhichKeyDesc_git_unstash    = "<leader>gZ Unstash"
+let g:WhichKeyDesc_git_revert     = "<leader>gr Rollback lines"
+nnoremap <leader>gs :action Vcs.Show.Local.Changes<CR>
+nnoremap <leader>gc :action CheckinProject<CR>
+nnoremap <leader>gp :action Vcs.Push<CR>
+nnoremap <leader>gu :action Vcs.UpdateProject<CR>
+nnoremap <leader>gb :action Git.Branches<CR>
+nnoremap <leader>gl :action Vcs.Show.Log<CR>
+nnoremap <leader>ga :action Annotate<CR>
+nnoremap <leader>gz :action Git.Stash<CR>
+nnoremap <leader>gZ :action Git.Unstash<CR>
+nnoremap <leader>gr :action Vcs.RollbackChangedLines<CR>
+
+" ── s: search ──────────────────────────────────────────────────────────────
+let g:WhichKeyDesc_search         = "<leader>s +search"
+let g:WhichKeyDesc_search_file    = "<leader>ss Search in file"
+let g:WhichKeyDesc_search_proj    = "<leader>sp Search in project"
+let g:WhichKeyDesc_search_repl    = "<leader>sr Replace in project"
+let g:WhichKeyDesc_search_clear   = "<leader>sc Clear highlight"
+let g:WhichKeyDesc_search_sym     = "<leader>sy Go to symbol"
+nnoremap <leader>ss :action Find<CR>
+nnoremap <leader>sp :action FindInPath<CR>
+nnoremap <leader>sr :action ReplaceInPath<CR>
+nnoremap <leader>sc :nohlsearch<CR>
+nnoremap <leader>sy :action GotoSymbol<CR>
+
+" ── c: code ────────────────────────────────────────────────────────────────
+let g:WhichKeyDesc_code           = "<leader>c +code"
+let g:WhichKeyDesc_code_action    = "<leader>ca Code action"
+let g:WhichKeyDesc_code_rename    = "<leader>cr Rename symbol"
+let g:WhichKeyDesc_code_format    = "<leader>cf Format"
+let g:WhichKeyDesc_code_imports   = "<leader>ci Optimize imports"
+let g:WhichKeyDesc_code_def       = "<leader>cd Go to definition"
+let g:WhichKeyDesc_code_impl      = "<leader>cD Go to implementation"
+let g:WhichKeyDesc_code_usages    = "<leader>cu Find usages"
+let g:WhichKeyDesc_code_refactor  = "<leader>cR Refactor this"
+let g:WhichKeyDesc_code_err       = "<leader>ce Explain error"
+let g:WhichKeyDesc_code_next      = "<leader>cn Next error"
+let g:WhichKeyDesc_code_prev      = "<leader>cp Previous error"
+nnoremap <leader>ca :action ShowIntentionActions<CR>
+nnoremap <leader>cr :action RenameElement<CR>
+nnoremap <leader>cf :action ReformatCode<CR>
+nnoremap <leader>ci :action OptimizeImports<CR>
+nnoremap <leader>cd :action GotoDeclaration<CR>
+nnoremap <leader>cD :action GotoImplementation<CR>
+nnoremap <leader>cu :action FindUsages<CR>
+nnoremap <leader>cR :action Refactorings.QuickListPopupAction<CR>
+nnoremap <leader>ce :action ShowErrorDescription<CR>
+nnoremap <leader>cn :action GotoNextError<CR>
+nnoremap <leader>cp :action GotoPreviousError<CR>
+
+" ── t: toggles ─────────────────────────────────────────────────────────────
+let g:WhichKeyDesc_toggle         = "<leader>t +toggles"
+let g:WhichKeyDesc_toggle_term    = "<leader>tt Terminal"
+let g:WhichKeyDesc_toggle_zen     = "<leader>tz Zen mode"
+let g:WhichKeyDesc_toggle_dist    = "<leader>td Distraction free"
+let g:WhichKeyDesc_toggle_proj    = "<leader>tp Project view"
+let g:WhichKeyDesc_toggle_prob    = "<leader>te Problems"
+let g:WhichKeyDesc_toggle_num     = "<leader>tn Relative numbers"
+let g:WhichKeyDesc_toggle_full    = "<leader>tf Full screen"
+nnoremap <leader>tt :action ActivateTerminalToolWindow<CR>
+nnoremap <leader>tz :action ToggleZenMode<CR>
+nnoremap <leader>td :action ToggleDistractionFreeMode<CR>
+nnoremap <leader>tp :action ActivateProjectToolWindow<CR>
+nnoremap <leader>te :action ActivateProblemsViewToolWindow<CR>
+nnoremap <leader>tn :set relativenumber!<CR>
+nnoremap <leader>tf :action ToggleFullScreen<CR>
+
+" ── d: debug / run ─────────────────────────────────────────────────────────
+let g:WhichKeyDesc_debug          = "<leader>d +debug/run"
+let g:WhichKeyDesc_debug_run      = "<leader>dr Run"
+let g:WhichKeyDesc_debug_debug    = "<leader>dd Debug"
+let g:WhichKeyDesc_debug_stop     = "<leader>ds Stop"
+let g:WhichKeyDesc_debug_rerun    = "<leader>dR Rerun"
+let g:WhichKeyDesc_debug_break    = "<leader>db Toggle breakpoint"
+let g:WhichKeyDesc_debug_breaks   = "<leader>dB View breakpoints"
+let g:WhichKeyDesc_debug_conf     = "<leader>dc Choose configuration"
+nnoremap <leader>dr :action Run<CR>
+nnoremap <leader>dd :action Debug<CR>
+nnoremap <leader>ds :action Stop<CR>
+nnoremap <leader>dR :action Rerun<CR>
+nnoremap <leader>db :action ToggleLineBreakpoint<CR>
+nnoremap <leader>dB :action ViewBreakpoints<CR>
+nnoremap <leader>dc :action ChooseRunConfiguration<CR>
+
+" ── a: AI (Gemini in Android Studio, standing in for Copilot chat) ─────────
+let g:WhichKeyDesc_ai             = "<leader>a +ai"
+let g:WhichKeyDesc_ai_chat        = "<leader>aa Chat"
+let g:WhichKeyDesc_ai_transform   = "<leader>at Transform selection"
+let g:WhichKeyDesc_ai_explain     = "<leader>ae Explain code"
+let g:WhichKeyDesc_ai_doc         = "<leader>ad Document"
+nnoremap <leader>aa :action com.google.studiobot.container.trajectory.ActivateChatAction<CR>
+nnoremap <leader>at :action sml.studiobot.custom.transform<CR>
+nnoremap <leader>ae :action sml.studiobot.explain<CR>
+nnoremap <leader>ad :action sml.studiobot.document<CR>
+xnoremap <leader>at :action sml.studiobot.custom.transform<CR>
+xnoremap <leader>ae :action sml.studiobot.explain<CR>
+
+" ── j: jump (EasyMotion) ───────────────────────────────────────────────────
+let g:WhichKeyDesc_jump           = "<leader>j +jump"
+let g:WhichKeyDesc_jump_char      = "<leader>jj Jump to character"
+let g:WhichKeyDesc_jump_word      = "<leader>jw Jump to word"
+let g:WhichKeyDesc_jump_line      = "<leader>jl Jump to line"
+map <leader>jj <Plug>(easymotion-s)
+map <leader>jw <Plug>(easymotion-bd-w)
+map <leader>jl <Plug>(easymotion-bd-jk)
+
+" ── q: quit ────────────────────────────────────────────────────────────────
+let g:WhichKeyDesc_quit           = "<leader>q +quit"
+let g:WhichKeyDesc_quit_close     = "<leader>qq Close editor"
+let g:WhichKeyDesc_quit_reload    = "<leader>qr Reload .ideavimrc"
+nnoremap <leader>qq :action CloseContent<CR>
+nnoremap <leader>qr :source ~/.ideavimrc<CR>
+
+" ═══════════════════════════════════════════════════════════════════════════
+"  Not carried over from the VS Code config, and why:
+"
+"  * Magit bindings (x, -, S--, S-o, y, g in magit buffers)
+"      No Magit for the IntelliJ platform. The <leader>g menu drives the
+"      built-in Git tool window instead; it covers status, commit, push,
+"      pull, branches, log, blame, stash and rollback.
+"
+"  * The shift+s explorer macro (split down + open + close others)
+"      VS Code's `runCommands` has no IdeaVim equivalent. Closest is
+"      <leader>w- then opening the file.
+"
+"  * Suggest-widget / parameter-hint / code-action navigation
+"      Handled by the IDE half of the setup, in keymaps/VSCode-Vim.xml,
+"      because those popups are IDE-owned and Vim never sees the keys.
+" ═══════════════════════════════════════════════════════════════════════════

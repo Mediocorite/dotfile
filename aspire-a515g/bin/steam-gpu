@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Launch Steam on the RTX 2050, with the GPU cleared of Ollama first.
+#
+# Games inherit this process's environment, so setting the offload variables
+# here applies them to every title without per-game launch options.
+#
+# Ollama is stopped for the duration rather than just unloaded: an unloaded
+# model reloads on the next autocomplete request, which would claw back ~2 GB
+# of a 4 GB card while a game is running. It is started again on exit.
+set -u
+
+OLLAMA_WAS_ACTIVE=0
+systemctl --user is-active --quiet ollama.service && OLLAMA_WAS_ACTIVE=1
+
+restore_ollama() {
+    if [ "$OLLAMA_WAS_ACTIVE" -eq 1 ]; then
+        systemctl --user start ollama.service >/dev/null 2>&1 || true
+    fi
+}
+trap restore_ollama EXIT INT TERM
+
+if [ "$OLLAMA_WAS_ACTIVE" -eq 1 ]; then
+    systemctl --user stop ollama.service >/dev/null 2>&1 || true
+fi
+
+# GLX for OpenGL titles, the optimus layer for Vulkan ones.
+export __NV_PRIME_RENDER_OFFLOAD=1
+export __GLX_VENDOR_LIBRARY_NAME=nvidia
+export __VK_LAYER_NV_optimus=NVIDIA_only
+export STEAM_FRAME_FORCE_CLOSE=1
+
+/usr/bin/steam "$@"
+
+# If Steam was already running, the call above just handed the URL to the
+# existing instance and returned straight away. Wait for the real client to
+# exit before giving the GPU back to Ollama.
+while pgrep -x steam >/dev/null 2>&1; do
+    sleep 5
+done

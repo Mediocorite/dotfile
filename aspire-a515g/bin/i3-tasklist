@@ -1,0 +1,256 @@
+#!/usr/bin/env python3
+"""Polybar module: open windows on the focused workspace, as icons + titles.
+
+Runs as a long-lived process (polybar `tail = true`) and subscribes to i3's
+IPC event stream, so it redraws only when a window or workspace actually
+changes instead of polling on a timer. Idle cost is zero.
+
+Icons are built from explicit codepoints -- never paste literal glyphs into
+this file, they get mangled by editors and tooling.
+
+  --once   print a single line and exit (for testing)
+"""
+import json
+import os
+import re
+import socket
+import struct
+import subprocess
+import sys
+
+# ── Catppuccin Mocha ─────────────────────────────────────────────────────────
+FG_DIM   = "#7f849c"
+ACCENT   = "#89b4fa"
+URGENT   = "#f38ba8"
+BG_FOCUS = "#313244"
+SEPCOL   = "#45475a"
+
+MAX_TITLE = 16          # truncate titles past this many chars
+MAX_ITEMS = 5           # beyond this, collapse the rest into a "+N" chip
+
+# Material Design Nerd Font codepoints, all verified present in the installed
+# JetBrainsMono Nerd Font.
+I = {
+    "firefox":  0xF0239, "chrome": 0xF02AF, "web":     0xF059F,
+    "android":  0xF0032, "code":   0xF0A1E, "terminal": 0xF018D,
+    "folder":   0xF024B, "chat":   0xF0B79, "music":    0xF075A,
+    "image":    0xF02E9, "video":  0xF0567, "book":     0xF00BA,
+    "cog":      0xF0493, "sparkle": 0xF09E8, "window":  0xF05AF,
+}
+
+# matched as substrings against "<class> <instance>", first hit wins
+ICONS = [
+    ("firefox", "firefox"), ("zen", "firefox"), ("librewolf", "firefox"),
+    ("navigator", "firefox"),
+    ("chromium", "chrome"), ("google-chrome", "chrome"), ("brave", "chrome"),
+    ("android-studio", "android"), ("jetbrains-studio", "android"),
+    ("jetbrains", "code"), ("code", "code"), ("cursor", "code"),
+    ("claude", "sparkle"), ("chatgpt", "sparkle"),
+    ("ghostty", "terminal"), ("kitty", "terminal"), ("alacritty", "terminal"),
+    ("terminal", "terminal"), ("konsole", "terminal"),
+    ("nemo", "folder"), ("nautilus", "folder"), ("thunar", "folder"),
+    ("caja", "folder"), ("files", "folder"),
+    ("spotify", "music"), ("audacious", "music"), ("audiorelay", "music"),
+    ("discord", "chat"), ("slack", "chat"), ("telegram", "chat"),
+    ("thunderbird", "chat"), ("element", "chat"),
+    ("gimp", "image"), ("inkscape", "image"), ("eog", "image"),
+    ("vlc", "video"), ("mpv", "video"), ("celluloid", "video"),
+    ("obsidian", "book"), ("libreoffice", "book"), ("xed", "book"),
+    ("settings", "cog"), ("pavucontrol", "cog"), ("blueman", "cog"),
+    ("cinnamon-settings", "cog"),
+]
+
+
+def icon_for(cls, inst):
+    hay = f"{cls} {inst}".lower()
+    for key, name in ICONS:
+        if key in hay:
+            return chr(I[name])
+    return chr(I["window"])
+
+
+# ── i3 IPC (raw protocol; avoids a dependency on python3-i3ipc) ──────────────
+MAGIC = b"i3-ipc"
+GET_TREE, SUBSCRIBE = 4, 2
+
+
+def ipc_connect():
+    path = os.environ.get("I3SOCK") or subprocess.run(
+        ["i3", "--get-socketpath"], capture_output=True, text=True, check=True
+    ).stdout.strip()
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.connect(path)
+    return s
+
+
+def ipc_send(sock, msg_type, payload=b""):
+    if isinstance(payload, str):
+        payload = payload.encode()
+    sock.sendall(MAGIC + struct.pack("=II", len(payload), msg_type) + payload)
+
+
+def _recv_exact(sock, n):
+    buf = b""
+    while len(buf) < n:
+        chunk = sock.recv(n - len(buf))
+        if not chunk:
+            raise ConnectionError("i3 closed the IPC socket")
+        buf += chunk
+    return buf
+
+
+def ipc_recv(sock):
+    header = _recv_exact(sock, len(MAGIC) + 8)
+    length, msg_type = struct.unpack("=II", header[len(MAGIC):])
+    return msg_type, json.loads(_recv_exact(sock, length) or b"null")
+
+
+# ── tree handling ────────────────────────────────────────────────────────────
+def walk(node, out):
+    if node.get("window") is not None and node.get("name") is not None:
+        out.append(node)
+    for key in ("nodes", "floating_nodes"):
+        for child in node.get(key, []):
+            walk(child, out)
+    return out
+
+
+def focused_workspace(tree):
+    """The workspace containing the focused window, else the visible one."""
+    hit = []
+
+    def rec(n, ws=None):
+        if n.get("type") == "workspace":
+            ws = n
+        if ws is not None and n.get("focused") and not hit:
+            hit.append(ws)
+        for key in ("nodes", "floating_nodes"):
+            for c in n.get(key, []):
+                rec(c, ws)
+
+    rec(tree)
+    if hit:
+        return hit[0]
+
+    def visible(n):
+        if n.get("type") == "workspace" and n.get("visible"):
+            return n
+        for key in ("nodes", "floating_nodes"):
+            for c in n.get(key, []):
+                r = visible(c)
+                if r:
+                    return r
+        return None
+    return visible(tree)
+
+
+def shorten(title, cls):
+    t = re.sub(
+        r"\s+[-–—]\s+(Mozilla Firefox|Google Chrome|Android Studio|"
+        r"Visual Studio Code|Chromium|Brave)\s*$", "", (title or "").strip())
+    t = re.sub(r"^\(\d+\)\s*", "", t)
+    if len(t) > MAX_TITLE:
+        t = t[:MAX_TITLE - 1].rstrip() + "…"
+    return t or cls or "?"
+
+
+def esc_text(s):
+    return s.replace("%", "%%")
+
+
+def esc_action(cmd):
+    return cmd.replace("\\", "\\\\").replace(":", "\\:")
+
+
+def render(tree):
+    ws = focused_workspace(tree)
+    if ws is None:
+        return ""
+    windows = walk(ws, [])
+    if not windows:
+        return "%{F" + FG_DIM + "}—%{F-}"
+
+    overflow = 0
+    if len(windows) > MAX_ITEMS:
+        overflow = len(windows) - MAX_ITEMS
+        shown = windows[:MAX_ITEMS]
+        if not any(w.get("focused") for w in shown):
+            foc = next((w for w in windows if w.get("focused")), None)
+            if foc is not None:
+                shown[-1] = foc
+        windows = shown
+
+    parts = []
+    for w in windows:
+        props = w.get("window_properties") or {}
+        cls, inst = props.get("class", "") or "", props.get("instance", "") or ""
+        glyph = icon_for(cls, inst)
+        title = esc_text(shorten(w.get("name"), cls))
+
+        if w.get("urgent"):
+            body = "%{F" + URGENT + "} " + glyph + " " + title + " %{F-}"
+        elif w.get("focused"):
+            body = ("%{B" + BG_FOCUS + "}%{F" + ACCENT + "} "
+                    + glyph + " " + title + " %{F-}%{B-}")
+        else:
+            body = "%{F" + FG_DIM + "} " + glyph + " " + title + " %{F-}"
+
+        cid = w["id"]
+        parts.append(
+            "%{A1:" + esc_action(f"i3-msg -q [con_id={cid}] focus") + ":}"
+            "%{A2:" + esc_action(f"i3-msg -q [con_id={cid}] kill") + ":}"
+            + body + "%{A}%{A}"
+        )
+
+    if overflow:
+        parts.append("%{F" + FG_DIM + "} +" + str(overflow) + " %{F-}")
+
+    return ("%{F" + SEPCOL + "}│%{F-}").join(parts)
+
+
+def get_tree(sock):
+    ipc_send(sock, GET_TREE)
+    while True:
+        mtype, payload = ipc_recv(sock)
+        if not mtype & 0x80000000:
+            return payload
+
+
+def main():
+    once = "--once" in sys.argv
+    try:
+        query = ipc_connect()
+    except Exception:
+        return 1
+
+    if once:
+        print(render(get_tree(query)), flush=True)
+        return 0
+
+    events = ipc_connect()
+    ipc_send(events, SUBSCRIBE, '["window","workspace"]')
+
+    last = None
+    line = render(get_tree(query))
+    print(line, flush=True)
+    last = line
+
+    while True:
+        try:
+            mtype, _ = ipc_recv(events)
+            if not mtype & 0x80000000:
+                continue
+            line = render(get_tree(query))
+            if line != last:           # only repaint on a real change
+                print(line, flush=True)
+                last = line
+        except (ConnectionError, OSError, json.JSONDecodeError):
+            return 0                   # polybar restarts us
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        sys.exit(0)
